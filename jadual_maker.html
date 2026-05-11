@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Penjadualan Visual Unit v18.7</title>
+    <!-- Tambah Library html2pdf -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --primary-light: #eff6ff;
+            --danger: #ef4444;
+            --success: #10b981;
+            --dark: #1e293b;
+            --border: #e2e8f0;
+            --text-slate: #64748b;
+        }
+
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: var(--dark); margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+
+        /* Role Selector */
+        .role-selector { background: var(--dark); color: white; padding: 10px 20px; border-radius: 50px; display: flex; align-items: center; gap: 10px; float: right; margin-bottom: 20px; }
+        .role-selector select { background: #334155; color: white; border: 1px solid #475569; padding: 5px; border-radius: 5px; cursor: pointer; }
+
+        /* Header & Actions Alignment */
+        .header { 
+            clear: both; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            background: white; 
+            padding: 24px; 
+            border-radius: 16px; 
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); 
+            margin-bottom: 25px; 
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn-add, .btn-off, .btn-download {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+            height: 44px;
+            white-space: nowrap;
+        }
+
+        .btn-add { background: var(--primary); color: white; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2); }
+        .btn-add:hover { background: var(--primary-hover); transform: translateY(-2px); }
+        .btn-off { background: white; color: var(--text-slate); border: 1px solid var(--border); }
+        .btn-off:hover { background: #f1f5f9; color: var(--dark); transform: translateY(-2px); }
+        .btn-download { background: #e11d48; color: white; } /* Diubah ke merah sedikit untuk identiti PDF */
+        .btn-download:hover { opacity: 0.9; transform: translateY(-2px); }
+
+        /* Table & Layout */
+        .table-container { background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #f1f5f9; padding: 15px; text-align: left; font-size: 11px; text-transform: uppercase; color: #64748b; }
+        td { padding: 15px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; margin-bottom: 4px; }
+        .badge-start { background: var(--primary-light); color: var(--primary); }
+        .badge-end { background: #f0fdf4; color: #15803d; }
+        .badge-double { background: #fee2e2; color: #b91c1c; font-size: 10px; padding: 2px 6px; margin-left: 5px; border: 1px solid #f87171; font-weight: bold; }
+        .unit-tag { font-size: 9px; padding: 2px 5px; border-radius: 4px; background: #e2e8f0; color: #475569; margin-right: 5px; vertical-align: middle; }
+
+        .btn-action { border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 800; width: 100%; margin-bottom: 5px; }
+        .btn-edit { background: #e0f2fe; color: #0369a1; }
+        .btn-finish { background: #dcfce7; color: #166534; }
+
+        /* Status Cuti Section */
+        .leave-status-container { background: #fff1f2; border: 1px solid #fecdd3; padding: 15px; border-radius: 16px; margin-bottom: 20px; }
+        .leave-status-title { font-size: 12px; font-weight: 800; color: #be123c; text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+        .leave-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+        .leave-tag { background: white; border: 1px solid #fda4af; padding: 5px 12px; border-radius: 8px; font-size: 12px; display: flex; flex-direction: column; }
+
+        /* Access Control */
+        .admin-only { display: none !important; }
+        body.is-admin .admin-only { display: inline-flex !important; }
+        body.is-admin .admin-cell { display: table-cell !important; }
+
+        /* Modal Styles */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(4px); z-index: 2000; }
+        .modal-content { background: white; width: 750px; margin: 5% auto; padding: 30px; border-radius: 20px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+        
+        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 5px; box-sizing: border-box; font-family: inherit; font-size: 13px; }
+        .cuti-row { display: grid; grid-template-columns: 30px 140px 130px 130px 1fr; gap: 12px; align-items: center; padding: 10px; border-bottom: 1px solid #f1f5f9; }
+        .header-cuti { font-weight: 800; font-size: 10px; color: #94a3b8; letter-spacing: 0.5px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 5px; }
+
+        #krewCutiBox { max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; background: white; padding: 5px; }
+        #krewSelectionBox { display: none; background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 15px; max-height: 200px; overflow-y: auto; }
+        .krew-opt { display: flex; align-items: center; gap: 15px; padding: 10px; border-radius: 8px; cursor: pointer; width: 100%; box-sizing: border-box; }
+        .krew-opt:hover { background: #f1f5f9; }
+        .krew-opt.disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Styling Khas untuk PDF Output */
+        .pdf-header { display: none; text-align: center; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+    </style>
+</head>
+<body class="is-user">
+
+<div id="printArea" class="container">
+    <div class="role-selector">
+        <span id="roleLabel">Akses: View Only</span>
+        <select id="userRole" onchange="checkAccess(this.value)">
+            <optgroup label="Paparan Umum (View Only)">
+                <option value="user">Paparan Semua Unit</option>
+                <option value="view_audio">Paparan Unit Audio</option>
+                <option value="view_light">Paparan Unit Lighting</option>
+                <option value="view_cam">Paparan Unit Kamera</option>
+            </optgroup>
+            <optgroup label="Pentadbir (Admin)">
+                <option value="admin_cam">Admin Kameraman</option>
+                <option value="admin_audio">Admin Audio</option>
+                <option value="admin_light">Admin Lighting</option>
+            </optgroup>
+        </select>
+    </div>
+
+    <!-- Header PDF (Hanya muncul dalam PDF) -->
+    <div class="pdf-header" id="pdfHeader">
+        <h1 style="margin:0;">JADUAL TUGASAN VISUAL UNIT</h1>
+        <p id="pdfDateSub" style="margin:5px 0;">Tarikh Cetakan: </p>
+    </div>
+
+    <div class="header">
+        <div>
+            <h2 id="displayUnitName">Sistem Penjadualan Visual Unit</h2>
+            <p style="margin:4px 0 0 0; color:#64748b; font-size: 14px;">Seksyen Program TV - Pengurusan Cuti & Tugasan</p>
+        </div>
+        <div class="header-actions">
+            <!-- Butang PDF -->
+            <button class="btn-download" onclick="generatePDF()">Download PDF</button>
+            <div class="admin-only" style="display:flex; gap:12px;">
+                <button class="btn-off" onclick="bukaModalCuti()">Set Krew Cuti</button>
+                <button class="btn-add" onclick="bukaModalJob()">+ Tambah Job Baru</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="displayCuti" class="leave-status-container" style="display:none;">
+        <div class="leave-status-title">Senarai Krew Bercuti / Off-Day</div>
+        <div id="listKrewCuti" class="leave-grid"></div>
+    </div>
+
+    <div class="table-container">
+        <table id="mainTable">
+            <thead>
+                <tr>
+                    <th width="20%">Tarikh & Masa</th>
+                    <th width="25%">Maklumat Job</th>
+                    <th width="8%">Krew</th>
+                    <th width="32%">Senarai Petugas</th>
+                    <th class="admin-only admin-cell" width="15%">Tindakan</th>
+                </tr>
+            </thead>
+            <tbody id="isiJadual"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Cuti -->
+<div id="cutiModal" class="modal">
+    <div class="modal-content">
+        <h3 id="cutiModalTitle">Pengurusan Cuti Krew</h3>
+        <div class="cuti-row header-cuti">
+            <span></span><span>NAMA KREW</span><span>TARIKH MULA</span><span>HINGGA</span><span>JENIS CUTI</span>
+        </div>
+        <div id="krewCutiBox"></div>
+        <div style="margin-top:20px;">
+            <button onclick="tutupModalCuti()" style="width:100%; padding:14px; background:var(--dark); color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">Simpan & Tutup</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Job -->
+<div id="jobModal" class="modal">
+    <div class="modal-content" style="width:500px;">
+        <h3 id="modalTitle">Daftar Tugasan</h3>
+        <input type="hidden" id="editRowId">
+        <input type="hidden" id="krewLamaData">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <div><label style="font-size:10px; font-weight:700;">TARIKH MULA</label><input type="date" id="tkhMula" onchange="toggleKrewCuaca()"></div>
+            <div><label style="font-size:10px; font-weight:700;">TARIKH TAMAT</label><input type="date" id="tkhTamat"></div>
+            <div><label style="font-size:10px; font-weight:700;">MASA MULA</label><input type="time" id="masaMula"></div>
+            <div><label style="font-size:10px; font-weight:700;">MASA TAMAT</label><input type="time" id="masaTamat"></div>
+        </div>
+        <label style="font-size:10px; font-weight:700; margin-top:10px; display:block;">JENIS TUGASAN</label>
+        <select id="jenisJob" onchange="toggleKrewCuaca()">
+            <option value="Job Luar">Job Luar</option>
+            <option value="Parlimen">Parlimen</option>
+            <option value="Cuaca">Cuaca</option>
+            <option value="Studio">Studio</option>
+        </select>
+        <div id="bilKrewInput"><label style="font-size:10px; font-weight:700;">BILANGAN KREW</label><input type="number" id="bilKrew" min="1"></div>
+        <div id="krewSelectionBox"><div id="senaraiKrewCheckbox"></div></div>
+        <label style="font-size:10px; font-weight:700; margin-top:10px; display:block;">NOTA / LOKASI</label>
+        <textarea id="jobDesc" rows="2" placeholder="Lokasi..."></textarea>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button onclick="tutupModalJob()" style="flex:1; padding:12px; border-radius:10px; border:none; background:#e2e8f0; cursor:pointer;">Batal</button>
+            <button onclick="prosesSimpan()" style="flex:2; padding:12px; background:var(--primary); color:white; border-radius:10px; border:none; font-weight:bold; cursor:pointer;">Simpan Tugasan</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const DATA_UNIT = {
+        admin_cam: {
+            nama: "Kameraman",
+            pwd: "cam123",
+            krew: ["Ahmad Bakri", "Zulkifli Ariffin", "Siti Nurhaliza", "Farah Wahida", "Ravi Ganesan", "Alif Zaimee"]
+        },
+        admin_audio: {
+            nama: "Audio",
+            pwd: "audio123",
+            krew: ["Audio 1", "Audio 2", "Audio 3", "Audio 4"]
+        },
+        admin_light: {
+            nama: "Lighting",
+            pwd: "light123",
+            krew: ["Light 1", "Light 2", "Light 3"]
+        }
+    };
+
+    let currentUnit = null;
+    let viewOnlyUnit = null; 
+    let dataCuti = {}; 
+    let semuaJob = [];
+
+    // FUNGSI BARU: GENERATE PDF
+    function generatePDF() {
+        if (semuaJob.length === 0) {
+            alert("Tiada data jadual untuk didownload.");
+            return;
+        }
+
+        const element = document.getElementById('printArea');
+        const roleLabel = document.getElementById('roleLabel').innerText;
+        const dateStr = new Date().toLocaleDateString('ms-MY');
+
+        // Sediakan option untuk html2pdf
+        const opt = {
+            margin:       [10, 10, 10, 10],
+            filename:     `Jadual_Visual_${dateStr}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, logging: false },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+        };
+
+        // Sorokkan elemen yang tidak perlu dalam PDF (seperti butang & selector)
+        const selectors = document.querySelector('.role-selector');
+        const actions = document.querySelector('.header-actions');
+        const actionCells = document.querySelectorAll('.admin-cell');
+        
+        selectors.style.display = 'none';
+        actions.style.display = 'none';
+        actionCells.forEach(cell => cell.style.display = 'none');
+
+        // Jalankan Proses PDF
+        html2pdf().set(opt).from(element).save().then(() => {
+            // Paparkan semula selepas selesai
+            selectors.style.display = 'flex';
+            actions.style.display = 'flex';
+            if(document.body.className === "is-admin") {
+                actionCells.forEach(cell => cell.style.display = 'table-cell');
+            }
+        });
+    }
+
+    function checkAccess(val) {
+        viewOnlyUnit = null; 
+
+        if (val.startsWith('admin_')) {
+            if (prompt(`Password Admin ${DATA_UNIT[val].nama}:`) === DATA_UNIT[val].pwd) {
+                currentUnit = val;
+                document.body.className = "is-admin";
+                document.getElementById("roleLabel").innerText = `Akses: ${DATA_UNIT[val].nama}`;
+                document.getElementById("displayUnitName").innerText = `Sistem Jadual: ${DATA_UNIT[val].nama}`;
+            } else {
+                document.getElementById("userRole").value = currentUnit || "user";
+                alert("Kata laluan salah!");
+                return;
+            }
+        } else {
+            currentUnit = null;
+            document.body.className = "is-user";
+            
+            if (val === "view_audio") {
+                viewOnlyUnit = "admin_audio";
+                document.getElementById("roleLabel").innerText = "Paparan: Audio";
+            } else if (val === "view_light") {
+                viewOnlyUnit = "admin_light";
+                document.getElementById("roleLabel").innerText = "Paparan: Lighting";
+            } else if (val === "view_cam") {
+                viewOnlyUnit = "admin_cam";
+                document.getElementById("roleLabel").innerText = "Paparan: Kamera";
+            } else {
+                document.getElementById("roleLabel").innerText = "Akses: View Only";
+            }
+            
+            document.getElementById("displayUnitName").innerText = "Sistem Penjadualan Visual Unit";
+        }
+        paparJadualIkutUnit();
+    }
+
+    function updateDataCuti(nama, field, val) {
+        if (!dataCuti[nama]) dataCuti[nama] = { aktif: false, tkhMula: "", tkhTamat: "", jenis: "Cuti Rehat" };
+        dataCuti[nama][field] = val;
+        paparKrewCutiUtama();
+    }
+
+    function paparKrewCutiUtama() {
+        const listDiv = document.getElementById("listKrewCuti");
+        const displayDiv = document.getElementById("displayCuti");
+        listDiv.innerHTML = "";
+        let adaCuti = false;
+
+        const unitFilter = currentUnit || viewOnlyUnit;
+
+        Object.keys(DATA_UNIT).forEach(unitKey => {
+            if (unitFilter && unitKey !== unitFilter) return;
+
+            const u = DATA_UNIT[unitKey];
+            u.krew.forEach(n => {
+                const c = dataCuti[n];
+                if (c && c.aktif) {
+                    adaCuti = true;
+                    listDiv.innerHTML += `
+                        <div class="leave-tag">
+                            <strong><span class="unit-tag">${u.nama}</span>${n}</strong>
+                            <small style="color:#e11d48">${c.jenis}: ${c.tkhMula} hingga ${c.tkhTamat}</small>
+                        </div>`;
+                }
+            });
+        });
+        displayDiv.style.display = adaCuti ? "block" : "none";
+    }
+
+    function paparJadualIkutUnit() {
+        const tbody = document.getElementById("isiJadual");
+        tbody.innerHTML = "";
+        
+        const unitFilter = currentUnit || viewOnlyUnit;
+        const filteredJobs = semuaJob.filter(j => !unitFilter || j.unitID === unitFilter);
+        
+        filteredJobs.sort((a, b) => new Date(b.meta.tkhMula) - new Date(a.meta.tkhMula));
+
+        filteredJobs.forEach(job => {
+            const row = tbody.insertRow();
+            row.setAttribute('data-id', job.id);
+            const meta = job.meta;
+            
+            const krewSibuk = [];
+            semuaJob.forEach(otherJob => {
+                if (otherJob.id !== job.id && otherJob.meta.tkhMula === meta.tkhMula) {
+                    otherJob.petugas.forEach(p => krewSibuk.push(p));
+                }
+            });
+
+            row.innerHTML = `
+                <td>
+                    <div class="badge badge-start">MULA: ${meta.tkhMula}</div><br>
+                    <div class="badge badge-end">TAMAT: ${meta.tkhTamat || meta.tkhMula}</div><br>
+                    <div class="badge" style="background:#fef3c7; color:#92400e;">JAM: ${meta.masaMula || '00:00'} - ${meta.masaTamat || '00:00'}</div>
+                </td>
+                <td><strong><span class="unit-tag">${DATA_UNIT[job.unitID].nama}</span>${meta.jenis}</strong><br><small>${meta.desc || '-'}</small></td>
+                <td style="text-align:center"><strong>${job.petugas.length}</strong></td>
+                <td><ul style="margin:0; padding-left:15px; font-size:12px;">
+                    ${job.petugas.map(n => {
+                        const isDouble = krewSibuk.includes(n);
+                        return `<li>${n} ${isDouble ? '<span class="badge-double">DOUBLE JOB</span>' : ''}</li>`;
+                    }).join('')}
+                </ul></td>
+                <td class="admin-only admin-cell">
+                    <button class="btn-action btn-edit" onclick="bukaEditJob('${job.id}')">KEMASKINI</button>
+                    <button class="btn-action btn-finish" onclick="padamJob('${job.id}')">SELESAI</button>
+                </td>`;
+        });
+        paparKrewCutiUtama();
+    }
+
+    function prosesSimpan() {
+        if(!currentUnit) return;
+        const unitSkrg = DATA_UNIT[currentUnit];
+        const rowId = document.getElementById("editRowId").value;
+        const jenis = document.getElementById("jenisJob").value;
+        const tkhMula = document.getElementById("tkhMula").value;
+        const tkhTamat = document.getElementById("tkhTamat").value;
+        const masaMula = document.getElementById("masaMula").value;
+        const masaTamat = document.getElementById("masaTamat").value;
+        const desc = document.getElementById("jobDesc").value;
+        const krewLamaRaw = document.getElementById("krewLamaData").value;
+        let krewAsal = krewLamaRaw ? JSON.parse(krewLamaRaw) : [];
+
+        if(!tkhMula) return alert("Sila pilih tarikh!");
+
+        let terpilih = [];
+        let krewAvailable = unitSkrg.krew.filter(n => !semakStatusCutiKrew(n, tkhMula));
+
+        if (jenis === "Cuaca") {
+            document.querySelectorAll('#senaraiKrewCheckbox input:checked').forEach(cb => terpilih.push(cb.value));
+        } else {
+            const bilBaru = parseInt(document.getElementById("bilKrew").value);
+            if (!bilBaru) return alert("Bilangan krew?");
+            terpilih = krewAsal.filter(n => krewAvailable.includes(n));
+            if (terpilih.length < bilBaru) {
+                let krewBolehPilih = krewAvailable.filter(n => !terpilih.includes(n));
+                let jumlahPerluTambah = Math.min(bilBaru - terpilih.length, krewBolehPilih.length);
+                for(let i=0; i<jumlahPerluTambah; i++) {
+                    let randIdx = Math.floor(Math.random() * krewBolehPilih.length);
+                    terpilih.push(krewBolehPilih.splice(randIdx, 1)[0]);
+                }
+            } else { terpilih = terpilih.slice(0, bilBaru); }
+        }
+
+        if (terpilih.length === 0) return alert("Pilih petugas!");
+
+        const jobData = {
+            id: rowId || Date.now().toString(),
+            unitID: currentUnit,
+            petugas: terpilih,
+            meta: { tkhMula, tkhTamat, masaMula, masaTamat, jenis, desc }
+        };
+
+        if(rowId) {
+            const index = semuaJob.findIndex(j => j.id === rowId);
+            semuaJob[index] = jobData;
+        } else {
+            semuaJob.push(jobData);
+        }
+
+        tutupModalJob();
+        paparJadualIkutUnit();
+    }
+
+    function padamJob(id) {
+        if(confirm('Padam tugasan ini?')) {
+            semuaJob = semuaJob.filter(j => j.id !== id);
+            paparJadualIkutUnit();
+        }
+    }
+
+    function bukaEditJob(id) {
+        const job = semuaJob.find(j => j.id === id);
+        if(!job) return;
+        
+        bukaModalJob(); 
+        document.getElementById("modalTitle").innerText = "Kemaskini Tugasan";
+        document.getElementById("editRowId").value = job.id;
+        document.getElementById("krewLamaData").value = JSON.stringify(job.petugas);
+        document.getElementById("tkhMula").value = job.meta.tkhMula;
+        document.getElementById("tkhTamat").value = job.meta.tkhTamat;
+        document.getElementById("masaMula").value = job.meta.masaMula;
+        document.getElementById("masaTamat").value = job.meta.masaTamat;
+        document.getElementById("jenisJob").value = job.meta.jenis;
+        document.getElementById("jobDesc").value = job.meta.desc;
+        document.getElementById("bilKrew").value = job.petugas.length;
+        toggleKrewCuaca();
+    }
+
+    function bukaModalCuti() {
+        if(!currentUnit) return;
+        const box = document.getElementById("krewCutiBox");
+        document.getElementById("cutiModalTitle").innerText = `Cuti Krew: ${DATA_UNIT[currentUnit].nama}`;
+        box.innerHTML = DATA_UNIT[currentUnit].krew.map(n => {
+            const cuti = dataCuti[n] || { aktif: false, tkhMula: "", tkhTamat: "", jenis: "Cuti Rehat" };
+            return `
+                <div class="cuti-row">
+                    <input type="checkbox" onchange="updateDataCuti('${n}', 'aktif', this.checked)" ${cuti.aktif ? 'checked' : ''}>
+                    <span style="font-size:13px; font-weight:600;">${n}</span>
+                    <input type="date" value="${cuti.tkhMula}" onchange="updateDataCuti('${n}', 'tkhMula', this.value)">
+                    <input type="date" value="${cuti.tkhTamat}" onchange="updateDataCuti('${n}', 'tkhTamat', this.value)">
+                    <select onchange="updateDataCuti('${n}', 'jenis', this.value)">
+                        <option ${cuti.jenis == 'Cuti Rehat' ? 'selected' : ''}>Cuti Rehat</option>
+                        <option ${cuti.jenis == 'MC' ? 'selected' : ''}>MC</option>
+                        <option ${cuti.jenis == 'Off-Day' ? 'selected' : ''}>Off-Day</option>
+                    </select>
+                </div>`;
+        }).join('');
+        document.getElementById("cutiModal").style.display = "block";
+    }
+
+    function semakStatusCutiKrew(nama, tarikhJob) {
+        const c = dataCuti[nama];
+        if (!c || !c.aktif || !tarikhJob || !c.tkhMula || !c.tkhTamat) return false;
+        const j = new Date(tarikhJob).setHours(0,0,0,0);
+        const m = new Date(c.tkhMula).setHours(0,0,0,0);
+        const t = new Date(c.tkhTamat).setHours(0,0,0,0);
+        return (j >= m && j <= t);
+    }
+
+    function toggleKrewCuaca() {
+        if(!currentUnit) return;
+        const jenis = document.getElementById("jenisJob").value;
+        const tkh = document.getElementById("tkhMula").value;
+        const box = document.getElementById("krewSelectionBox");
+        const bil = document.getElementById("bilKrewInput");
+        
+        if (jenis === "Cuaca") {
+            box.style.display = "block"; bil.style.display = "none";
+            document.getElementById("senaraiKrewCheckbox").innerHTML = DATA_UNIT[currentUnit].krew.map(n => {
+                const off = semakStatusCutiKrew(n, tkh);
+                return `
+                <label class="krew-opt ${off ? 'disabled' : ''}">
+                    <input type="checkbox" value="${n}" ${off ? 'disabled' : ''}>
+                    <div class="krew-info">
+                        <span style="font-size:13px; font-weight:600;">${n}</span>
+                        ${off ? `<small style="color:red">${dataCuti[n].jenis}</small>` : ''}
+                    </div>
+                </label>`;
+            }).join('');
+        } else { box.style.display = "none"; bil.style.display = "block"; }
+    }
+
+    function bukaModalJob() {
+        if (document.body.className !== 'is-admin') return;
+        document.getElementById("modalTitle").innerText = "Daftar Tugasan Baru";
+        document.getElementById("editRowId").value = "";
+        document.getElementById("krewLamaData").value = "";
+        document.getElementById("jobModal").style.display = "block";
+    }
+    
+    function tutupModalJob() { document.getElementById("jobModal").style.display = "none"; }
+    function tutupModalCuti() { document.getElementById("cutiModal").style.display = "none"; paparKrewCutiUtama(); }
+</script>
+</body>
+</html>
